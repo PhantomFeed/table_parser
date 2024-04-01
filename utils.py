@@ -74,10 +74,11 @@ def run_textcleaner(filename, img_id):
 Run tesseract to perform optical character recognition (OCR)
 """
 def run_tesseract(filename, img_id, psm, oem):
+    # pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files (x86)/Tesseract-OCR/tesseract.exe'
     mkdir("bin/extracted/")
 
     image = Image.open(filename)
-    language = 'eng'
+    language = 'rus'
     configuration = "--psm " + str(psm) + " --oem " + str(oem)
 
     # Run tesseract

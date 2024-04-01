@@ -1,15 +1,35 @@
+import os.path
+import shutil
+
+import cv2
 import numpy as np
 import cv2 as cv
 import utils
+from rotate_img import rotate_img
 from table import Table
 from PIL import Image
 import xlsxwriter
 import sys
 from pdf2image import convert_from_path
 
+if os.path.exists('bin/tables'):
+    shutil.rmtree('bin/tables/')
+os.mkdir('bin/tables/')
+
+if os.path.exists('bin/rotated_tables'):
+    shutil.rmtree('bin/rotated_tables/')
+os.mkdir('bin/rotated_tables/')
+
+if os.path.exists('bin/table'):
+    shutil.rmtree('bin/table/')
+os.mkdir('bin/table/')
+
 # =====================================================
 # IMAGE LOADING
 # =====================================================
+
+# path = "D:/Programs/Projects/table-parser-opencv/ilovepdf_pages-to-jpg/paivanov_240321-112619-613_page-0006.jpg"
+
 if len(sys.argv) < 2:
     print("Usage: python main.py <img_path>")
     sys.exit(1)
@@ -52,7 +72,8 @@ BLOCK_SIZE = 15
 THRESHOLD_CONSTANT = 0
 
 # Filter image
-filtered = cv.adaptiveThreshold(~grayscale, MAX_THRESHOLD_VALUE, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, BLOCK_SIZE, THRESHOLD_CONSTANT)
+filtered = cv.adaptiveThreshold(~grayscale, MAX_THRESHOLD_VALUE, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY,
+                                BLOCK_SIZE, THRESHOLD_CONSTANT)
 
 # =====================================================
 # LINE ISOLATION
@@ -93,7 +114,7 @@ mask = horizontal + vertical
 intersections = cv.bitwise_and(horizontal, vertical)
 
 # Get tables from the images
-tables = [] # list of tables
+tables = []  # list of tables
 for i in range(len(contours)):
     # Verify that region of interest is a table
     (rect, table_joints) = utils.verify_table(contours[i], intersections)
@@ -119,26 +140,30 @@ for i in range(len(contours)):
 
     tables.append(table)
 
-    #cv.rectangle(image, (table.x, table.y), (table.x + table.w, table.y + table.h), (0, 255, 0), 1, 8, 0)
-    #cv.imshow("tables", image)
-    #cv.waitKey(0)
+    # cv.rectangle(image, (table.x, table.y), (table.x + table.w, table.y + table.h), (0, 255, 0), 1, 8, 0)
+    # cv.imshow("tables", image)
+    # cv.waitKey(0)
 
 # =====================================================
 # OCR AND WRITING TEXT TO EXCEL
 # =====================================================
-out = "bin/"
-table_name = "table.jpg"
+
+out4tables = "bin/tables/"
+table_name = "table"
+out4rotated = "bin/rotated_tables/"
 psm = 6
 oem = 3
 mult = 3
 
+out = "bin/"
 utils.mkdir(out)
-utils.mkdir("bin/table/")
+# utils.mkdir("bin/table/")
 
 utils.mkdir("excel/")
 workbook = xlsxwriter.Workbook('excel/tables.xlsx')
 
-for table in tables:
+n = 0
+for table in list(tables):
     worksheet = workbook.add_worksheet()
 
     table_entries = table.get_table_entries()
@@ -146,23 +171,30 @@ for table in tables:
     table_roi = image[table.y:table.y + table.h, table.x:table.x + table.w]
     table_roi = cv.resize(table_roi, (table.w * mult, table.h * mult))
 
-    cv.imwrite(out + table_name, table_roi)
+    cv.imwrite(out4tables + table_name + str(n) + '.jpg', table_roi)
+
+    rotated = rotate_img(table_roi)
+    cv.imwrite(out4rotated + 'result' + str(n) + '.jpg', rotated)
 
     num_img = 0
     for i in range(len(table_entries)):
         row = table_entries[i]
         for j in range(len(row)):
             entry = row[j]
-            entry_roi = table_roi[entry[1] * mult: (entry[1] + entry[3]) * mult, entry[0] * mult:(entry[0] + entry[2]) * mult]
+            entry_roi = table_roi[entry[1] * mult: (entry[1] + entry[3]) * mult,
+                        entry[0] * mult:(entry[0] + entry[2]) * mult]
 
-            fname = out + "table/cell" + str(num_img) + ".jpg"
+            utils.mkdir("bin/table/" + str(n))
+            fname = out + "table/" + str(n) + "/cell" + str(num_img) + ".jpg"
             cv.imwrite(fname, entry_roi)
 
-            fname = utils.run_textcleaner(fname, num_img)
+            # fname = utils.run_textcleaner(fname, num_img)
             text = utils.run_tesseract(fname, num_img, psm, oem)
 
             num_img += 1
 
             worksheet.write(i, j, text)
+
+    n += 1
 
 workbook.close()
