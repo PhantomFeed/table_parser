@@ -60,6 +60,3 @@ def rotate_img(image):
 #     cv2.imshow('Rotated Image', rotated_image)
 #     cv2.waitKey(0)
 #     cv2.destroyAllWindows()
-
-if __name__ == '__main__':
-    rotate_img("./eblan.png")

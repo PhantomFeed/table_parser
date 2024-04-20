@@ -1,34 +1,18 @@
 import os.path
 import shutil
-
-import cv2
 import numpy as np
 import cv2 as cv
 import utils
 from rotate_img import rotate_img
 from table import Table
 from PIL import Image
-import xlsxwriter
 import sys
 from pdf2image import convert_from_path
-
-if os.path.exists('bin/tables'):
-    shutil.rmtree('bin/tables/')
-os.mkdir('bin/tables/')
-
-if os.path.exists('bin/rotated_tables'):
-    shutil.rmtree('bin/rotated_tables/')
-os.mkdir('bin/rotated_tables/')
-
-if os.path.exists('bin/table'):
-    shutil.rmtree('bin/table/')
-os.mkdir('bin/table/')
+from cellextractor import generate_tables
 
 # =====================================================
 # IMAGE LOADING
 # =====================================================
-
-# path = "D:/Programs/Projects/table-parser-opencv/ilovepdf_pages-to-jpg/paivanov_240321-112619-613_page-0006.jpg"
 
 if len(sys.argv) < 2:
     print("Usage: python main.py <img_path>")
@@ -44,8 +28,14 @@ if path.endswith(".pdf"):
 else:
     ext_img = Image.open(path)
 
+if os.path.exists("data"):
+    shutil.rmtree("data")
+os.makedirs("data")
+
 ext_img.save("data/target.png", "PNG")
 image = cv.imread("data/target.png")
+
+image = rotate_img(image)
 
 # Convert resized RGB image to grayscale
 NUM_CHANNELS = 3
@@ -118,7 +108,7 @@ tables = []  # list of tables
 for i in range(len(contours)):
     # Verify that region of interest is a table
     (rect, table_joints) = utils.verify_table(contours[i], intersections)
-    if rect == None or table_joints == None:
+    if rect is None or table_joints is None:
         continue
 
     # Create a new instance of a table
@@ -126,8 +116,8 @@ for i in range(len(contours)):
 
     # Get an n-dimensional array of the coordinates of the table joints
     joint_coords = []
-    for i in range(len(table_joints)):
-        joint_coords.append(table_joints[i][0][0])
+    for j in range(len(table_joints)):
+        joint_coords.append(table_joints[j][0][0])
     joint_coords = np.asarray(joint_coords)
 
     # Returns indices of coordinates in sorted order
@@ -140,17 +130,21 @@ for i in range(len(contours)):
 
     tables.append(table)
 
-    # cv.rectangle(image, (table.x, table.y), (table.x + table.w, table.y + table.h), (0, 255, 0), 1, 8, 0)
-    # cv.imshow("tables", image)
-    # cv.waitKey(0)
-
 # =====================================================
 # OCR AND WRITING TEXT TO EXCEL
 # =====================================================
 
 out4tables = "bin/tables/"
+if os.path.exists(out4tables):
+    shutil.rmtree(out4tables)
+os.makedirs(out4tables)
+
 table_name = "table"
 out4rotated = "bin/rotated_tables/"
+if os.path.exists(out4rotated):
+    shutil.rmtree(out4rotated)
+os.makedirs(out4rotated)
+
 psm = 6
 oem = 3
 mult = 3
@@ -159,13 +153,12 @@ out = "bin/"
 utils.mkdir(out)
 # utils.mkdir("bin/table/")
 
-utils.mkdir("excel/")
-workbook = xlsxwriter.Workbook('excel/tables.xlsx')
+if os.path.exists("excel"):
+    shutil.rmtree("excel")
+os.makedirs("excel")
 
 n = 0
 for table in list(tables):
-    worksheet = workbook.add_worksheet()
-
     table_entries = table.get_table_entries()
 
     table_roi = image[table.y:table.y + table.h, table.x:table.x + table.w]
@@ -174,27 +167,11 @@ for table in list(tables):
     cv.imwrite(out4tables + table_name + str(n) + '.jpg', table_roi)
 
     rotated = rotate_img(table_roi)
-    cv.imwrite(out4rotated + 'result' + str(n) + '.jpg', rotated)
+    cv.imwrite(out4rotated + table_name + str(n) + '.jpg', rotated)
 
     num_img = 0
-    for i in range(len(table_entries)):
-        row = table_entries[i]
-        for j in range(len(row)):
-            entry = row[j]
-            entry_roi = table_roi[entry[1] * mult: (entry[1] + entry[3]) * mult,
-                        entry[0] * mult:(entry[0] + entry[2]) * mult]
-
-            utils.mkdir("bin/table/" + str(n))
-            fname = out + "table/" + str(n) + "/cell" + str(num_img) + ".jpg"
-            cv.imwrite(fname, entry_roi)
-
-            # fname = utils.run_textcleaner(fname, num_img)
-            text = utils.run_tesseract(fname, num_img, psm, oem)
-
-            num_img += 1
-
-            worksheet.write(i, j, text)
 
     n += 1
 
-workbook.close()
+for i in range(n):
+    generate_tables(f"{out4rotated}/{table_name}{i}.jpg", i)
