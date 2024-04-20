@@ -1,6 +1,7 @@
 .venv
 .idea
 
+data/
 bin/
 excel/
 ilovepdf_pages-to-jpg/
